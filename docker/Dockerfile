@@ -76,7 +76,7 @@ RUN mkdir -p /app/sessions
 VOLUME ["/app/sessions"]
 
 # Metadata
-LABEL "org.opencontainers.image.source"="https://github.com/uwudev/ygege"
+LABEL "org.opencontainers.image.source"="https://github.com/PiloUnk/ygege"
 LABEL "org.opencontainers.image.title"="Ygégé"
 LABEL "org.opencontainers.image.description"="High-performance indexer for YGG Torrent written in Rust"
 LABEL "org.opencontainers.image.documentation"="https://github.com/uwudev/ygege/wiki"

@@ -28,7 +28,8 @@ The API does not require direct authentication. YGG authentication is automatica
 
 - [`GET /torrent/info`](#torrent-information) - Detailed information
 - [`GET /torrent/{id}/files`](#torrent-files) - File list
-- [`GET /download`](#download-torrent) - Download .torrent file
+- [`GET /torrent/{id}`](#download-torrent) - Download .torrent file
+- [`GET /magnet/{id}`](#download-magnet) - Get magnet link
 
 ### 👤 User
 
@@ -239,11 +240,11 @@ curl "http://localhost:8715/torrent/1234567/files"
 
 ## Download Torrent
 
-### `GET /download`
+### `GET /torrent/{id}`
 
-Download the .torrent file.
+Download the .torrent file for a specific torrent.
 
-#### Query Parameters
+#### Path Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -252,15 +253,37 @@ Download the .torrent file.
 #### Example
 
 ```bash
-curl -O "http://localhost:8715/download?id=1234567"
+curl -O "http://localhost:8715/torrent/1234567"
 ```
 
 #### Response
 
-Returns the `.torrent` file with `Content-Type: application/x-bittorrent` header.
+Returns the `.torrent` file with `Content-Type: application/x-bittorrent` header and sets `Content-Disposition: attachment; filename="{id}.torrent"`.
 
 ---
+## Download Magnet
 
+### `GET /magnet/{id}`
+
+Get the magnet link for a specific torrent.
+
+#### Path Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | number | ✅ | Torrent ID |
+
+#### Example
+
+```bash
+curl "http://localhost:8715/magnet/1234567"
+```
+
+#### Response
+
+Returns the magnet link URI that can be used with torrent clients.
+
+---
 ## User Information
 
 ### `GET /user`
@@ -382,7 +405,7 @@ All errors return a JSON object:
 ## Rate Limiting
 
 To avoid YGG rate limiting:
-
+torrent/
 - **Searches**: Limit to 1 request per second
 - **Downloads**: No strict limit
 
@@ -404,7 +427,7 @@ results=$(curl -s "http://localhost:8715/search?q=moana+2")
 torrent_id=$(echo $results | jq -r '.[0].id')
 
 # 3. Download
-curl -O "http://localhost:8715/download?id=$torrent_id"
+curl -O "http://localhost:8715/torrent/$torrent_id"
 ```
 
 ### With Python
@@ -422,7 +445,7 @@ torrents = response.json()
 # Download first result
 if torrents:
     torrent_id = torrents[0]["id"]
-    download_url = f"{BASE_URL}/download?id={torrent_id}"
+    download_url = f"{BASE_URL}/torrent/{torrent_id}"
     
     response = requests.get(download_url)
     with open(f"{torrent_id}.torrent", "wb") as f:

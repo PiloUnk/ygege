@@ -28,7 +28,8 @@ L'API ne nécessite pas d'authentification directe. L'authentification YGG est g
 
 - [`GET /torrent/info`](#informations-torrent) - Informations détaillées
 - [`GET /torrent/{id}/files`](#fichiers-torrent) - Liste des fichiers
-- [`GET /download`](#télécharger-torrent) - Télécharger le fichier .torrent
+- [`GET /torrent/{id}`](#télécharger-torrent) - Télécharger le fichier .torrent
+- [`GET /magnet/{id}`](#obtenir-magnet) - Obtenir le lien magnet
 
 ### 👤 Utilisateur
 
@@ -239,11 +240,11 @@ curl "http://localhost:8715/torrent/1234567/files"
 
 ## Télécharger torrent
 
-### `GET /download`
+### `GET /torrent/{id}`
 
-Télécharge le fichier .torrent.
+Télécharge le fichier .torrent pour un torrent spécifique.
 
-#### Paramètres de requête
+#### Paramètres de chemin
 
 | Paramètre | Type | Requis | Description |
 |-----------|------|--------|-------------|
@@ -252,12 +253,12 @@ Télécharge le fichier .torrent.
 #### Exemple
 
 ```bash
-curl -O "http://localhost:8715/download?id=1234567"
+curl -O "http://localhost:8715/torrent/1234567"
 ```
 
 #### Réponse
 
-Renvoie le fichier `.torrent` avec le header `Content-Type: application/x-bittorrent`.
+Renvoie le fichier `.torrent` avec le header `Content-Type: application/x-bittorrent` et définit `Content-Disposition: attachment; filename="{id}.torrent"`.
 
 ---
 
@@ -404,7 +405,7 @@ results=$(curl -s "http://localhost:8715/search?q=vaiana+2")
 torrent_id=$(echo $results | jq -r '.[0].id')
 
 # 3. Télécharger
-curl -O "http://localhost:8715/download?id=$torrent_id"
+curl -O "http://localhost:8715/torrent/$torrent_id"
 ```
 
 ### Avec Python
@@ -422,7 +423,7 @@ torrents = response.json()
 # Télécharger le premier résultat
 if torrents:
     torrent_id = torrents[0]["id"]
-    download_url = f"{BASE_URL}/download?id={torrent_id}"
+    download_url = f"{BASE_URL}/torrent/{torrent_id}"
     
     response = requests.get(download_url)
     with open(f"{torrent_id}.torrent", "wb") as f:
