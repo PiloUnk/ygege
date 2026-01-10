@@ -238,7 +238,7 @@ pub async fn ygg_search(
     let mut sort = qs.get("sort").and_then(|s| s.parse::<Sort>().ok());
     let mut order = qs.get("order").and_then(|s| s.parse::<Order>().ok());
     let cats = qs.get("categories");
-    let connarr = qs.get("connarr");
+    let sortcat = qs.get("sortcat");
 
     debug!("Prowlarr/Jackett detected");
 
@@ -266,7 +266,7 @@ pub async fn ygg_search(
         None
     };
 
-    if categories_list.is_some() && connarr.is_some() {
+    if categories_list.is_some() && sortcat.is_some() {
         if categories_list.as_ref().unwrap().len() > 2 {
             categories_list = None;
         }
@@ -343,7 +343,7 @@ pub async fn ygg_search(
 
     // Prowlarr RSS feed compatibility trick
     if name.is_none() {
-        if connarr.is_some() {
+        if sortcat.is_some() {
             order = Some(Order::Descending);
             sort = Some(Sort::PublishDate);
         }
