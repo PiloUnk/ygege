@@ -1,0 +1,169 @@
+diff --git a/src/rest/mod.rs b/src/rest/mod.rs
+index a29b293..5121c6d 100644
+--- a/src/rest/mod.rs
++++ b/src/rest/mod.rs
+@@ -24,6 +24,7 @@ pub fn config_routes(cfg: &mut web::ServiceConfig) {
+     cfg.service(categories)
+         .service(ygg_search)
+         .service(download_torrent)
++        .service(download_magnet)
+         .service(get_user_info)
+         .service(health_check)
+         .service(status_check)
+diff --git a/src/rest/search.rs b/src/rest/search.rs
+index d0968c8..aa0bd76 100644
+--- a/src/rest/search.rs
++++ b/src/rest/search.rs
+@@ -245,7 +245,7 @@ pub async fn ygg_search(
+     let mut sort = qs.get("sort").and_then(|s| s.parse::<Sort>().ok());
+     let mut order = qs.get("order").and_then(|s| s.parse::<Order>().ok());
+     let cats = qs.get("categories");
+-    let connarr = qs.get("connarr");
++    let sortcat = qs.get("sortcat");
+     let quote_search = qs.get("quote_search").map(|s| s == "true").unwrap_or(false);
+ 
+     debug!("Prowlarr/Jackett detected");
+@@ -274,7 +274,7 @@ pub async fn ygg_search(
+         None
+     };
+ 
+-    if categories_list.is_some() && connarr.is_some() {
++    if categories_list.is_some() && sortcat.is_some() {
+         if categories_list.as_ref().unwrap().len() > 2 {
+             categories_list = None;
+         }
+@@ -368,7 +368,7 @@ pub async fn ygg_search(
+ 
+     // Prowlarr RSS feed compatibility trick
+     if name.is_empty() {
+-        if connarr.is_some() {
++        if sortcat.is_some() {
+             order = Some(Order::Descending);
+             sort = Some(Sort::PublishDate);
+         }
+diff --git a/src/rest/torrent.rs b/src/rest/torrent.rs
+index 96ed6cd..1cd4d40 100644
+--- a/src/rest/torrent.rs
++++ b/src/rest/torrent.rs
+@@ -2,6 +2,8 @@ use crate::DOMAIN;
+ use crate::config::Config;
+ use crate::rest::client_extractor::MaybeCustomClient;
+ use actix_web::{HttpRequest, HttpResponse, get, web};
++use actix_web::http::header;
++use rs_torrent_magnet;
+ use serde_json::Value;
+ use tokio::time::{Duration, sleep};
+ 
+@@ -107,3 +109,86 @@ pub async fn download_torrent(
+ 
+     Ok(response_builder.body(body))
+ }
++
++#[get("/magnet/{id:[0-9]+}")]
++pub async fn download_magnet(
++    data: MaybeCustomClient,
++    config: web::Data<Config>,
++    req_data: HttpRequest,
++) -> Result<HttpResponse, Box<dyn std::error::Error>> {
++    let id = req_data.match_info().get("id").unwrap();
++    let id = id.parse::<usize>()?;
++
++    let domain_lock = DOMAIN.lock()?;
++    let cloned_guard = domain_lock.clone();
++    let domain = cloned_guard.as_str();
++    drop(domain_lock);
++
++    // Request token
++    let url = format!("https://{}/engine/start_download_timer", domain);
++    let body = format!("torrent_id={}", id);
++
++    debug!("Request download token {} {}", url, body);
++
++    let response = data
++        .client
++        .post(&url)
++        .body(body)
++        .header(
++            "Content-Type",
++            "application/x-www-form-urlencoded; charset=UTF-8",
++        )
++        .send()
++        .await?;
++
++    if !response.status().is_success() {
++        return Err(format!("Failed to get token: {}", response.status()).into());
++    }
++
++    let body: Value = response.json().await?;
++    debug!("Response {}", body);
++
++    let token = body
++        .get("token")
++        .and_then(|h| h.as_str())
++        .ok_or("Token not found in start_download_timer response")?;
++
++    if !config.turbo_enabled.unwrap_or(false) {
++        debug!("Wait 30 secs...");
++        sleep(Duration::from_secs(30)).await;
++        debug!("Wait is over");
++    }
++
++    // Request signed torrent file
++    let url = format!(
++        "https://{}/engine/download_torrent?id={}&token={}",
++        domain, id, token
++    );
++    debug!("download URL {}", url);
++
++    let response = data.client.get(&url).send().await?;
++
++    if !response.status().is_success() {
++        if response.status() == 302 {
++            warn!("Probably limit reached");
++        }
++        return Err(format!(
++            "Failed to get torrent file: {} {}",
++            response.status(),
++            response.text().await?
++        )
++        .into());
++    }
++
++    let body = response.bytes().await?;
++
++    // Convert torrent to magnet
++    let magnet_link = rs_torrent_magnet::magnet_from_torrent(body.to_vec())
++        .map_err(|e| format!("Failed to convert torrent to magnet: {:?}", e))?;
++
++    debug!("Converted torrent to magnet link");
++
++    Ok(HttpResponse::Ok()
++        .insert_header((header::CONTENT_TYPE, "text/plain"))
++        .body(magnet_link))
++}
+diff --git a/ygege-en.yml b/ygege-en.yml
+index b52547b..b34feb3 100644
+--- a/ygege-en.yml
++++ b/ygege-en.yml
+@@ -152,7 +152,7 @@ search:
+     imdbid: "{{ .Query.IMDBID }}"
+     tmdbid: "{{ .Query.TMDBID }}"
+     ban_words: "{{ if .Config.disablevfq }}vfq{{ else }}{{ end }}"
+-    connarr: "true"
++    sortcat: "true"
+     quote_search: "{{ if .Config.quote_search }}true{{ else }}false{{ end }}"
+ 
+   rows:
+diff --git a/ygege.yml b/ygege.yml
+index 2719e30..5615a81 100644
+--- a/ygege.yml
++++ b/ygege.yml
+@@ -152,7 +152,7 @@ search:
+     imdbid: "{{ .Query.IMDBID }}"
+     tmdbid: "{{ .Query.TMDBID }}"
+     ban_words: "{{ if .Config.disablevfq }}vfq{{ else }}{{ end }}"
+-    connarr: "true"
++    sortcat: "true"
+     quote_search: "{{ if .Config.quote_search }}true{{ else }}false{{ end }}"
+ 
+   rows:
