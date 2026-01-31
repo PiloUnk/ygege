@@ -1,3 +1,15 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 5a1eccc..740ef35 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -20,6 +20,7 @@ futures = "0.3"
+ urlencoding = "2.1"
+ async-stream = "0.3"
+ sysinfo = "0.38.0"
++rs_torrent_magnet = "0.3"
+ 
+ [profile.release]
+ opt-level = "z"
 diff --git a/src/rest/mod.rs b/src/rest/mod.rs
 index a29b293..5121c6d 100644
 --- a/src/rest/mod.rs
